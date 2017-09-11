@@ -1,0 +1,32 @@
+{
+    "jsonpaths": [
+        "$.Agent.AfterContactWorkEndTimestamp",
+        "$.Agent.AfterContactWorkStartTimestamp",
+        "$.AWSAccountId",
+        "$.AWSContactTraceRecordFormatVersion",
+        "$.Channel",
+        "$.Agent.ConnectedToAgentTimestamp",
+        "$.ConnectedToSystemTimestamp",
+        "$.ContactId",
+        "$.InitialContactId",
+        "$.InitiationTimestamp",
+        "$.CustomerEndpoint.Type",
+        "$.CustomerEndpoint.Address",
+        "$.Queue.DequeueTimestamp",
+        "$.DisconnectTimestamp",
+        "$.Queue.EnqueueTimestamp",
+        "$.AgentConnectionAttempts",
+        "$.Agent.Username",
+        "$.Agent.CustomerHoldDuration",
+        "$.InitiationTimestamp",
+        "$.LastUpdateTimestamp",
+        "$.SystemEndpoint.Type",
+        "$.SystemEndpoint.Address",
+        "$.Agent.NumberOfHolds",
+        "$.InstanceARN",
+        "$.PreviousCountactId",
+        "$.Queue.Name",
+        "$.Recording.Location",
+        "$.Agent.AgentInteractionDuration"
+    ]
+}

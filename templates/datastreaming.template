@@ -154,7 +154,7 @@ Resources:
         RedshiftDestinationConfiguration:
            ClusterJDBCURL: !Join ["",["jdbc:redshift://",!GetAtt RedshiftCluster.Endpoint.Address,":",!Sub "${DBPort}","/",!Sub "${DBName}"]]
            CopyCommand:
-              #CopyOptions: String
+              CopyOptions: "FORMAT AS JSON 's3://quickstart-reference/connect/integration/datastreaming/latest/scripts/source/ctr.json' TIMEFORMAT AS 'YYYY-MM-DDTHH:MI:SSZ'"
               DataTableName: "ctr"
            Password:
              Ref: "DBPwd"
@@ -189,7 +189,7 @@ Resources:
         RedshiftDestinationConfiguration:
            ClusterJDBCURL: !Join ["",["jdbc:redshift://",!GetAtt RedshiftCluster.Endpoint.Address,":",!Sub "${DBPort}","/",!Sub "${DBName}"]]
            CopyCommand:
-              #CopyOptions: String
+              CopyOptions: "FORMAT AS JSON 's3://quickstart-reference/connect/integration/datastreaming/latest/scripts/source/ctr_attr.json' TIMEFORMAT AS 'YYYY-MM-DDTHH:MI:SSZ'"
               DataTableName: "ctr_attr"
            Password:
              Ref: "DBPwd"
