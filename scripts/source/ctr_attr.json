@@ -1,0 +1,13 @@
+{
+    "jsonpaths": [
+        "$.AWSAccountId",
+        "$.InstanceARN",
+        "$.ContactId",
+        "$.InitialContactId",
+        "$.InitiationTimestamp",
+        "$.DisconnectTimestamp",
+        "$.LastUpdateTimestamp",
+        "$.AttributeKey",
+        "$.AttributeValue"
+    ]
+}

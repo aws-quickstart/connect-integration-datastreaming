@@ -1,0 +1,313 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Amazon Connect Quickstart for Data Streaming of Contact Trace Records 1.6, September 2017"
+Parameters:
+  DBPort:
+    Default: 8443
+    Type: Number
+  DBUser:
+    Default: "admin"
+    Type: String
+  DBName:
+    Default: "acctr"
+    Type: String
+  DBPwd:
+    NoEcho: true
+    Type: String
+    MinLength: 1
+    MaxLength: 41
+    AllowedPattern: ^[a-zA-Z0-9]*$
+Resources:
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+  RedshiftCluster:
+    Type: "AWS::Redshift::Cluster"
+    Properties:
+      ClusterType: "multi-node"
+      DBName:
+        Ref: "DBName"
+      MasterUsername:
+        Ref: "DBUser"
+      MasterUserPassword:
+        Ref: "DBPwd"
+      NodeType: "ds2.xlarge"
+      NumberOfNodes: 2
+      Port:
+        Ref: "DBPort"
+      Tags:
+        -
+          Key: "Service"
+          Value: "ContactCenter"
+  KinesisStream:
+    Type: "AWS::Kinesis::Stream"
+    Properties:
+      Name: "ctr-processor"
+      ShardCount: 1
+      Tags:
+        -
+          Key: "Service"
+          Value: "ContactCenter"
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service:
+              - "lambda.amazonaws.com"
+          Action:
+            - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                - "kinesis:ListStreams"
+                - "kinesis:GetShardIterator"
+                - "kinesis:GetRecords"
+                - "kinesis:DescribeStream"
+                - "firehose:PutRecord"
+                - "firehose:PutRecordBatch"
+                - "logs:PutLogEvents"
+                - "lambda:InvokeFunction"
+                - "lambda:GetFunctionConfiguration"
+                Resource: "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  LambdaCTRProcessor:
+    Type: "AWS::Lambda::Function"
+    Properties:
+        Handler: "index.handler"
+        Runtime: "nodejs6.10"
+        FunctionName: "ctr-processor"
+        Description: "Amazon Connect CTR Processor"
+        MemorySize: 128
+        Timeout: 30
+        Role:
+          Fn::GetAtt:
+            - "LambdaExecutionRole"
+            - "Arn"
+        Tags:
+          -
+            Key: "Service"
+            Value: "ContactCenter"
+        Code:
+          S3Bucket: quickstart-reference
+          S3Key:
+            Fn::Sub: connect/integration/datastreaming/latest/scripts/packages/ctrprocessor.zip
+  CTREventTrigger:
+   Type: "AWS::Lambda::EventSourceMapping"
+   Properties:
+     EventSourceArn:
+       Fn::GetAtt:
+         - "KinesisStream"
+         - "Arn"
+     FunctionName:
+       Fn::GetAtt:
+         - "LambdaCTRProcessor"
+         - "Arn"
+     StartingPosition: "LATEST"
+  FirehoseRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service:
+              - "firehose.amazonaws.com"
+          Action:
+            - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                - "firehose:PutRecord"
+                - "firehose:PutRecordBatch"
+                - "firehose:DeleteDeliveryStream"
+                - "firehose:UpdateDestination"
+                - "s3:AbortMultipartUpload"
+                - "s3:GetBucketLocation"
+                - "s3:GetObject"
+                - "s3:ListBucket"
+                - "s3:ListBucketMultipartUploads"
+                - "s3:PutObject"
+                - "logs:PutLogEvents"
+                - "lambda:InvokeFunction"
+                - "lambda:GetFunctionConfiguration"
+                Resource: "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonKinesisFirehoseFullAccess"
+  FireHoseCTRStream:
+    Type: "AWS::KinesisFirehose::DeliveryStream"
+    Properties:
+        DeliveryStreamName: "connect-ctr-to-rs"
+        RedshiftDestinationConfiguration:
+           ClusterJDBCURL: !Join ["",["jdbc:redshift://",!GetAtt RedshiftCluster.Endpoint.Address,":",!Sub "${DBPort}","/",!Sub "${DBName}"]]
+           CopyCommand:
+              CopyOptions: "FORMAT AS JSON 's3://quickstart-reference/connect/integration/datastreaming/latest/scripts/source/ctr.json' TIMEFORMAT AS 'YYYY-MM-DDTHH:MI:SSZ'"
+              DataTableName: "ctr"
+           Password:
+             Ref: "DBPwd"
+           RoleARN:
+             Fn::GetAtt:
+               - "FirehoseRole"
+               - "Arn"
+           S3Configuration:
+              BucketARN:
+                Fn::GetAtt:
+                  - "S3Bucket"
+                  - "Arn"
+              BufferingHints:
+                 IntervalInSeconds: 60
+                 SizeInMBs: 1
+              CloudWatchLoggingOptions:
+                 Enabled: "true"
+                 LogGroupName: "connect-ctr-to-rs"
+                 LogStreamName: "RedshiftDelivery"
+              CompressionFormat: "UNCOMPRESSED"
+              Prefix: "ctr-"
+              RoleARN:
+                Fn::GetAtt:
+                  - "FirehoseRole"
+                  - "Arn"
+           Username:
+             Ref: "DBUser"
+  FireHoseCTRATTRStream:
+    Type: "AWS::KinesisFirehose::DeliveryStream"
+    Properties:
+        DeliveryStreamName: "connect-ctr-attr-to-rs"
+        RedshiftDestinationConfiguration:
+           ClusterJDBCURL: !Join ["",["jdbc:redshift://",!GetAtt RedshiftCluster.Endpoint.Address,":",!Sub "${DBPort}","/",!Sub "${DBName}"]]
+           CopyCommand:
+              CopyOptions: "FORMAT AS JSON 's3://quickstart-reference/connect/integration/datastreaming/latest/scripts/source/ctr_attr.json' TIMEFORMAT AS 'YYYY-MM-DDTHH:MI:SSZ'"
+              DataTableName: "ctr_attr"
+           Password:
+             Ref: "DBPwd"
+           RoleARN:
+             Fn::GetAtt:
+               - "FirehoseRole"
+               - "Arn"
+           S3Configuration:
+              BucketARN:
+                Fn::GetAtt:
+                  - "S3Bucket"
+                  - "Arn"
+              BufferingHints:
+                 IntervalInSeconds: 60
+                 SizeInMBs: 5
+              CloudWatchLoggingOptions:
+                 Enabled: "true"
+                 LogGroupName: "connect-ctr-attr-to-rs"
+                 LogStreamName: "RedshiftDelivery"
+              CompressionFormat: "UNCOMPRESSED"
+              Prefix: "ctr_attr-"
+              RoleARN:
+                Fn::GetAtt:
+                  - "FirehoseRole"
+                  - "Arn"
+           Username:
+             Ref: "DBUser"
+  RedshiftTblCreator:
+    Type: "AWS::Lambda::Function"
+    Properties:
+        Handler: "index.handler"
+        Runtime: "nodejs6.10"
+        FunctionName: "rs-table-creator"
+        Description: "Amazon Connect Table Creator for Redshift"
+        MemorySize: 128
+        Timeout: 30
+        Role:
+          Fn::GetAtt:
+            - "LambdaExecutionRole"
+            - "Arn"
+        Environment:
+          Variables:
+            host_env:
+              Fn::GetAtt: RedshiftCluster.Endpoint.Address
+            db_env:
+              Ref: DBName
+            user_env:
+              Ref: DBUser
+            password_env:
+              Ref: DBPwd
+              NoEcho: true
+            port_env:
+              Fn::GetAtt: RedshiftCluster.Endpoint.Port
+        Tags:
+          -
+            Key: "Service"
+            Value: "ContactCenter"
+        Code:
+          S3Bucket: quickstart-reference
+          S3Key:
+            Fn::Sub: connect/integration/datastreaming/latest/scripts/packages/tblcreate.zip
+  RSTblInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    DependsOn: "RedshiftTblCreator"
+    Properties:
+      FunctionName: "rs-table-creator"
+      Action: 'lambda:InvokeFunction'
+      Principal: 'redshift.amazonaws.com'
+      SourceAccount:
+        Ref: 'AWS::AccountId'
+Outputs:
+  RedshiftCluster:
+    Description: "Amazon Redshift Cluster URL"
+    Value:
+      Fn::GetAtt:
+        - "RedshiftCluster"
+        - "Endpoint.Address"
+  S3Bucket:
+    Description: "Amazon Connect Data Streaming S3 Bucket"
+    Value:
+      Fn::GetAtt:
+        - "S3Bucket"
+        - "DomainName"
+  LambdaExecutionRole:
+    Description: "Lambda Function Execution Role"
+    Value:
+      Fn::GetAtt:
+        - "LambdaExecutionRole"
+        - "Arn"
+  LambdaCTRProcessor:
+    Description: "Lambda Function for CTR Processor"
+    Value:
+      Fn::GetAtt:
+        - "LambdaCTRProcessor"
+        - "Arn"
+  KinesisStream:
+    Description: "Kinesis CTR Data Stream"
+    Value:
+      Fn::GetAtt:
+        - "KinesisStream"
+        - "Arn"
+  FirehoseRole:
+    Description: "Kinesis Firehose IAM Role"
+    Value:
+      Fn::GetAtt:
+        - "FirehoseRole"
+        - "Arn"
+  FireHoseCTRStream:
+    Description: "Kinesis Firehose for CTR Stream"
+    Value:
+      Ref: "FireHoseCTRStream"
+  FireHoseCTRATTRStream:
+    Description: "Kinesis Firehose for CTR Attributes Stream"
+    Value:
+      Ref: "FireHoseCTRATTRStream"
+  RedshiftTblCreator:
+    Description: "Lambda Function for Redshift Table Creation"
+    Value:
+      Fn::GetAtt:
+        - "RedshiftTblCreator"
+        - "Arn"
