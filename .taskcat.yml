@@ -1,0 +1,12 @@
+project:
+  name: connect-integration-datastreaming
+  owner: quickstart@amazon.com
+  package_lambda: false
+  regions:
+    - us-east-1
+tests:
+  defaults:
+    parameters: {}
+    regions:
+      - us-east-1
+    template: templates/datastreaming-master.template.yaml

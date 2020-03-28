@@ -49,6 +49,7 @@ Metadata:
         default: AWS Quick Start Configuration
       Parameters:
       - QSS3BucketName
+      - QSS3BucketRegion
       - QSS3KeyPrefix
     ParameterLabels:
       DBName:
@@ -65,6 +66,8 @@ Metadata:
         default: Public Subnet ID
       QSS3BucketName:
         default: Quick Start S3 Bucket Name
+      QSS3BucketRegion:
+        default: Quick Start S3 bucket region
       QSS3KeyPrefix:
         default: Quick Start S3 Key Prefix
       VPCID:
@@ -110,6 +113,10 @@ Parameters:
       or end with a hyphen (-)
     Default: aws-quickstart
     Type: String
+  QSS3BucketRegion:
+    Default: 'us-east-1'
+    Description: 'The AWS Region where the Quick Start S3 bucket (QSS3BucketName) is hosted. When using your own bucket, you must specify this value.'
+    Type: String
   QSS3KeyPrefix:
     AllowedPattern: ^[0-9a-zA-Z-/]*$
     ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters,
@@ -140,6 +147,8 @@ Rules:
           - VpcId
         - Fn::RefAll: AWS::EC2::VPC::Id
       AssertDescription: All subnets must in the VPC
+Conditions:
+  UsingDefaultBucket: !Equals [!Ref QSS3BucketName, 'aws-quickstart']
 Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -313,7 +322,6 @@ Resources:
         Ref: PublicSubnetID
   RedshiftCluster:
     Type: AWS::Redshift::Cluster
-    DependsOn: ClusterSubnetGroup
     Properties:
       ClusterType: multi-node
       DBName:
