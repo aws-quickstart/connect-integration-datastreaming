@@ -62,7 +62,7 @@ exports.handler = (event, context, callback) => {
         }
         const record = records[position];
 
-        const payload = new Buffer(record.kinesis.data, 'base64').toString('ascii');
+        const payload = new Buffer.from(record.kinesis.data, 'base64').toString('ascii');
         console.log('Decoded payload:', payload);
 
         const ctr = JSON.parse(payload);
