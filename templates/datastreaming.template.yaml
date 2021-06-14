@@ -262,7 +262,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: ctrprocessor.handler
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Description: Amazon Connect CTR Processor
       MemorySize: 128
       Timeout: 30
@@ -383,7 +383,7 @@ Resources:
     DependsOn: RedshiftCluster
     Properties:
       Handler: tblcreate.handler
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Description: Amazon Connect Table Creator for Redshift
       MemorySize: 128
       Timeout: 60
